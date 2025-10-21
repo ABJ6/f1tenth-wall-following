@@ -1,1 +1,2 @@
-LINK: 
+RVIZ LINK: https://youtu.be/zEsfIfN5WbM
+DEMO LINK: https://youtu.be/dmr1pE9xX_U
