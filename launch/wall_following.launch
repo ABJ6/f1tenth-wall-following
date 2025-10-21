@@ -1,0 +1,13 @@
+<launch>
+    <param name="kp" value="0.8"/>
+    <param name="kd" value="0.1"/>
+    <param name="ki" value="0.0"/>
+    <param name="vel_input" value="15.0"/>
+
+    <node pkg="race" type="control.py" name="pid_controller" output="screen"/>
+    <node pkg="race" type="dist_finder.py" name="distance_finder" output="screen"/>
+    <node pkg="race" type="steering_marker.py" name="steering_marker" output="screen">
+        <param name="cmd_topic" value="/car_0/offboard/command"/>
+        <param name="frame_id"  value="base_link"/>
+    </node>
+</launch>
