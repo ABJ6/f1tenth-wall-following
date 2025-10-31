@@ -21,10 +21,18 @@ pub = rospy.Publisher('error', pid_input, queue_size=10)
 def getRange(data,angle):
 	langle = angle + 30.0
 	mindegree = math.degrees(data.angle_min)
+	maxdegree = math.degrees(data.angle_max)
+	print("ang_min "+ str(mindegree))
+	print("ang_max "+ str(maxdegree))
 	incridegree = math.degrees(data.angle_increment)
+	#print("inc "+ str(incridegree))
 	index = int((langle - mindegree) / incridegree)
 	index = max(0, min(index, len(data.ranges) - 1 ))
 	distance = data.ranges[index]
+	thing = find_disparity(data,0.1,0.2,data.angle_increment)
+	#print(thing)
+	print(len(thing))
+	
 	if math.isinf(distance) or math.isnan(distance):
 		return 0.0
 	
@@ -36,7 +44,71 @@ def getRange(data,angle):
     #TODO: implement
 	return distance
 
+def find_gap(data, d, n):
+	i = 0
+	seq = []
+	result = []
+	for number in data.ranges:
+		if number > d:
+			seq.append(number)
+		else:
+			if len(seq) > n:
+				result.append(seq)
+				print(i)
+			seq = []
+		i = i+1
+	if len(seq) > n:
+		result.append(seq)
+		print(i)
+	return result
 
+def find_disparity(data, disparity_ths, half_width, angle_increment):
+	dispartities = []
+	r = data.ranges
+	ranges = r[100:-100]
+	print(len(ranges))
+	for i in range(len(ranges) -1 ):
+		d1, d2 = ranges[i], ranges[i + 1]
+
+		if math.isinf(d1) or math.isinf(d2):
+			continue
+
+		if abs(d1 - d2 ) > disparity_ths:
+			index_near = i if d1 < d2 else i + 1
+			index_far = i + 1 if d1 < d2 else i 
+
+
+			closer_distance = ranges[index_near]
+
+			if closer_distance > 0 and closer_distance > half_width:
+				angle = 2 * math.asin(half_width / closer_distance)
+				num_samples_to_extend = int(angle / angle_increment)
+			else:
+				num_samples_to_extend = 0
+				
+			dispartities.append({
+				'dist_right': d1,
+				'index_right' : i,
+				'dist_left': d2,
+				'index_left' : i+1,
+				'num_sampels_to_extend': num_samples_to_extend
+			})
+
+	for disp in dispartities:
+		closer_dist = min(disp['dist_right'], disp['dist_left'])
+
+	if disp['dist_right'] < disp["dist_left"]:
+		start = disp['index_left']
+		direction = -1
+	else:
+		start = disp['index_right']
+		direction = 1
+	for r in range(disp['num_sampels_to_extend']):
+		index = start + j *direction
+		if 0 <= index < len(ranges):
+			ranges[index] = min(ranges[index], closer_dist)
+	return dispartities
+	
 
 def callback(data):
 	global forward_projection
@@ -80,6 +152,8 @@ def callback(data):
 	msg.pid_error = error
 	#msg.pid_vel = vel		# velocity error can also be sent.
 	pub.publish(msg)
+	#print(data.ranges)
+	#print(len(data.ranges))
 
 
 if __name__ == '__main__':
