@@ -46,7 +46,7 @@ def getRange(data,angle):
     # Outputs length in meters to object with angle in lidar scan field of view
     # Make sure to take care of NaNs etc.
     #TODO: implement
-	return target_angle
+	return target_angle, max_dist
 def find_gap(ranges):
 	max_dist = 0
 	best_index = 0
@@ -176,7 +176,8 @@ def callback(data):
 	
 
 	theta = 65 # you need to try different values for theta
-	angle = getRange(data, theta-120) # obtain the ray distance for theta
+	angle, gap_distance = getRange(data, theta-120) # obtain the ray distance for theta
+
 	
 	#b = getRange(data, -120)	# obtain the ray distance for 0 degrees (i.e. directly to the right of the car)nt()
 	##print("b "+ str(b))
@@ -213,6 +214,7 @@ def callback(data):
 	# this is the error that you want to send to the PID for steering correction.
 	msg.pid_error = angle
 	print(angle)
+	msg.pid_vel = gap_distance
 	#msg.pid_vel = vel		# velocity error can also be sent.
 	pub.publish(msg)
 	#print(data.ranges)

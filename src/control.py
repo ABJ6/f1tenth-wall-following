@@ -29,6 +29,23 @@ vel_input = 1.0	#TODO
 # Publisher for moving the car.
 # TODO: Use the coorect topic /car_x/offboard/command. The multiplexer listens to this topic
 command_pub = rospy.Publisher('/car_0/offboard/command', AckermannDrive, queue_size = 1)
+
+def calculate_dynamic_velocity(gap_distance, turning_angle, base_velocity, min_velocity=0.3):
+    angle_magnitude = abs(turning_angle) 
+    max_turn_angle = math.radians(90)
+    normalized_angle = min(angle_magnitude / max_turn_angle, 1.0) # normalized so its between 0 and 1
+    min_gap_dist = 0.5
+    max_gap_dist = 3.0
+    normalized_distance = max(0, min((gap_distance - min_gap_dist) / (max_gap_dist - min_gap_dist), 1.0))
+    distance_factor = normalized_distance ** 0.5
+    angle_penalty = (1 - normalized_angle) ** 2
+    combined_factor = 0.6 * distance_factor + 0.4 * angle_penalty
+
+    base_velocity = max(min_velocity, base_velocity)
+    scaled_velocity = min_velocity + (combined_factor * (base_velocity - min_velocity))
+    scaled_velocity = max(min_velocity, min(scaled_velocity, base_velocity))
+    return scaled_velocity
+
 def control(data):
 	global prev_error
 	global prev_velo
@@ -41,7 +58,16 @@ def control(data):
 
 	#print("PID Control Node is Listening to error")
 	turningangle = data.pid_error
+	gap_distance = data.pid_vel
 
+
+	dynamic_velocity = calculate_dynamic_velocity(
+        gap_distance=gap_distance,
+        turning_angle=turningangle,
+        base_velocity=vel_input,
+        min_velocity=0.3,
+        max_velocity=2.0
+    )
 
 	# 1. Scale the error
 	# 2. Apply the PID equation on error to compute steering
@@ -78,7 +104,7 @@ def control(data):
 	# TODO: Make sure the steering value is within bounds [-100,100]
 	command.steering_angle = math.degrees(turningangle) * 1.5
 	# TODO: Make sure the velocity is within bounds [0,100]
-	command.speed = vel_input 
+	command.speed = dynamic_velocity
 
 
 	# Move the car autonomously
