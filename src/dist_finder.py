@@ -19,7 +19,7 @@ pub = rospy.Publisher('error', pid_input, queue_size=10)
 # PID values = 55, 5, 0
 
 def getRange(data,angle):
-	newranges = find_disparity(data,0.1,0.2,data.angle_increment)
+	newranges, min_distance = find_disparity(data,0.1,0.25,data.angle_increment)
 	masked   = mask_unsafe(newranges, safety_dist=1.5)
 	best_index, max_dist = find_widest_gap_center(masked,.5,3,data.angle_increment,math.radians(-90),1)
 	#print(best_index)
@@ -36,7 +36,11 @@ def getRange(data,angle):
 	#distance = data.ranges[index]	
 	#if math.isinf(distance) or math.isnan(distance):
 	#	return 0.0
+	#try :
 	target_angle = math.radians(-90) + best_index * data.angle_increment
+	#except Exception as e:
+	#	target_angle = math.radians(-90) + 256 * data.angle_increment
+
 	
 	#target_angle = max(-math.radians(90), min(math.radians(90), target_angle))
 
@@ -46,7 +50,7 @@ def getRange(data,angle):
     # Outputs length in meters to object with angle in lidar scan field of view
     # Make sure to take care of NaNs etc.
     #TODO: implement
-	return target_angle
+	return target_angle, min_distance
 def find_gap(ranges):
 	max_dist = 0
 	best_index = 0
@@ -91,9 +95,11 @@ def find_disparity(data, disparity_ths, half_width, angle_increment):
 				'num_sampels_to_extend': num_samples_to_extend
 			})
 	#print(dispartities)
+	min_distance = 3
 	for disp in dispartities:
 		closer_dist = min(disp['dist_right'], disp['dist_left'])
-
+		if closer_dist < min_distance:
+			min_distance = closer_dist
 		if disp['dist_right'] < disp["dist_left"]:
 			start = disp['index_left']
 			direction = 1
@@ -107,7 +113,8 @@ def find_disparity(data, disparity_ths, half_width, angle_increment):
 					ranges[index] = closer_dist
 				ranges[index] = min(ranges[index], closer_dist)
 	#print(ranges)
-	return ranges
+	return ranges, min_distance
+
 def find_widest_gap_center(ranges, min_safe=0.5, max_valid=3.0,angle_inc = 0,angle_min = 2,turn_penality = 0):
     capped = [min(r, max_valid) if not math.isinf(r) else 0 for r in ranges]
     #print(capped)
@@ -131,21 +138,18 @@ def find_widest_gap_center(ranges, min_safe=0.5, max_valid=3.0,angle_inc = 0,ang
     if not gaps:
         return None, None
 
-    best_gaps=None
-    best_score = None
+    best_index = None
+    max_dist = -1
 
     for (s, e) in gaps:
-        mid = (s + e) //2
-        mid_dist = capped[mid]
-        mid_angle = angle_min + mid * angle_inc
-        score = mid_dist - turn_penality * abs(mid_angle)
-        if score > best_score:
-             best_score = score
-             best_gap = (mid, mid_dist)
-    if best_gap is None:
-        return None,None
-    return best_gap
-
+        for i in range(s, e + 1):
+            dist = capped[i] - turn_penality * abs(angle_min + i * angle_inc)
+            if dist > max_dist:
+                max_dist = dist
+                best_index = i
+    if best_index is None:
+        return None, None
+    return best_index, capped[best_index]
 
 def crop_lidar(data, fov_degrees=180):
 	half_fov = math.radians(fov_degrees/2)
@@ -171,12 +175,52 @@ def mask_unsafe(ranges, safety_dist=1.5):
     return out
 
 
+def DVS(data, turningangle):
+	# Parameters to tune
+	v_max = 25     # Max speed
+	v_min = 10     # Min speed
+	k_angle = 120  # Higher sensitivity = slower for sharper turns, tune as needed
+	k_obs = 40     # Higher = more drop as obstacles get closer
+
+    # Assumes your main node passes latest laser scan readings as a global, or you fetch them here
+	if data is not None:
+        # Use the minimum distance as obstacle metric, set a cap for very far obstacles
+		min_dist = min([r for r in data.ranges if not math.isnan(r) and not math.isinf(r)], 3.5)
+		min_dist = min(min_dist, 3)  # Use 3.5 meters as open
+	else:
+		min_dist = 1.0  # fallback
+
+    # 1. Obstacle-based velocity: faster if objects are farther away
+	v_obs = v_min + (v_max - v_min) * (min_dist / 3.5)  # Linear scaling
+
+    # 2. Turn-based velocity: slower for sharper steering
+	steering = abs(math.degrees(turningangle))
+	v_turn = v_max - k_angle * (steering / 90.0)  # Scaling, 90 deg = sharpest
+	v_turn = max(v_min, min(v_turn, v_max))
+
+    # 3. Select the lower of the two for safety
+	target_vel = min(v_obs, v_turn)
+	if 'prev_vel' in globals():
+		alpha = 0.2
+		target_vel = alpha * target_vel + (1-alpha) * prev_vel  # smooth!
+	prev_vel = target_vel
+
+
+
+	# 1. Scale the error
+	# 2. Apply the PID equation on error to compute steering
+	target_vel = max(v_min, min(target_vel, v_max))
+
+	return target_vel
+
+
 def callback(data):
 	global forward_projection
 	
 
 	theta = 65 # you need to try different values for theta
-	angle = getRange(data, theta-120) # obtain the ray distance for theta
+	angle, min_distance = getRange(data, theta-120)
+	speed = DVS(data,angle) # obtain the ray distance for theta
 	
 	#b = getRange(data, -120)	# obtain the ray distance for 0 degrees (i.e. directly to the right of the car)nt()
 	##print("b "+ str(b))
@@ -212,6 +256,7 @@ def callback(data):
 	msg = pid_input()	# An empty msg is created of the type pid_input
 	# this is the error that you want to send to the PID for steering correction.
 	msg.pid_error = angle
+	msg.pid_vel = speed
 	print(angle)
 	#msg.pid_vel = vel		# velocity error can also be sent.
 	pub.publish(msg)

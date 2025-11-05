@@ -31,7 +31,7 @@ vel_input = 1.0	#TODO
 command_pub = rospy.Publisher('/car_0/offboard/command', AckermannDrive, queue_size = 1)
 def control(data):
 	global prev_error
-	global prev_velo
+	global prev_vel
 	global vel_input
 	global kp
 	global kd
@@ -41,13 +41,13 @@ def control(data):
 
 	#print("PID Control Node is Listening to error")
 	turningangle = data.pid_error
+	min_vel = data.pid_vel
 
+	angle = max(-100, min(angle, 100))
 
 	# 1. Scale the error
-	# 2. Apply the PID equation on error to compute steering
-	angle = max(-100, min(angle, 100))
-	vel_input = max(0, min(vel_input,100))
-	print(vel_input)
+	# 2. Apply the PID equation on error to compute steerin
+	
 
 	#if errorabs > .5:
 	#	speed = max(vel_input - errorabs * 20, 30)
@@ -70,16 +70,14 @@ def control(data):
 	#	speed = MIN_SPEED
 	
 
-
-
 	# An empty AckermannDrive message is created. You will populate the steering_angle and the speed fields.
 	command = AckermannDrive()
 
 	# TODO: Make sure the steering value is within bounds [-100,100]
 	command.steering_angle = math.degrees(turningangle) * 1.5
 	# TODO: Make sure the velocity is within bounds [0,100]
-	command.speed = vel_input 
-
+	print(min_vel)
+	command.speed = min_vel
 
 	# Move the car autonomously
 	command_pub.publish(command)
