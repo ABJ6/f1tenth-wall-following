@@ -258,6 +258,7 @@ def callback(data):
 	msg.pid_error = angle
 	msg.pid_vel = speed
 	print(angle)
+	msg.pid_vel = gap_distance
 	#msg.pid_vel = vel		# velocity error can also be sent.
 	pub.publish(msg)
 	#print(data.ranges)
