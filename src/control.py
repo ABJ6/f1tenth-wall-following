@@ -30,21 +30,25 @@ vel_input = 1.0	#TODO
 # TODO: Use the coorect topic /car_x/offboard/command. The multiplexer listens to this topic
 command_pub = rospy.Publisher('/car_0/offboard/command', AckermannDrive, queue_size = 1)
 
-def calculate_dynamic_velocity(gap_distance, turning_angle, base_velocity, min_velocity=0.3):
-    angle_magnitude = abs(turning_angle) 
-    max_turn_angle = math.radians(90)
-    normalized_angle = min(angle_magnitude / max_turn_angle, 1.0) # normalized so its between 0 and 1
-    min_gap_dist = 0.5
-    max_gap_dist = 3.0
-    normalized_distance = max(0, min((gap_distance - min_gap_dist) / (max_gap_dist - min_gap_dist), 1.0))
-    distance_factor = normalized_distance ** 0.5
-    angle_penalty = (1 - normalized_angle) ** 2
-    combined_factor = 0.6 * distance_factor + 0.4 * angle_penalty
+#def calculate_dynamic_velocity(gap_distance, turning_angle, base_velocity, min_velocity=0.3):
+ #   angle_magnitude = abs(turning_angle) 
+  #  if math.degrees(angle_magnitude) > 80:
+   #     print(math.degrees(angle_magnitude))
+    #    scaled_velocity = vel_input - math.degrees(turning_angle) * .3
 
-    base_velocity = max(min_velocity, base_velocity)
-    scaled_velocity = min_velocity + (combined_factor * (base_velocity - min_velocity))
-    scaled_velocity = max(min_velocity, min(scaled_velocity, base_velocity))
-    return scaled_velocity
+    #max_turn_angle = math.radians(90)
+    #normalized_angle = min(angle_magnitude / max_turn_angle, 1.0) # normalized so its between 0 and 1
+    #min_gap_dist = 0.5
+    #max_gap_dist = 3.0
+    #normalized_distance = max(0, min((gap_distance - min_gap_dist) / (max_gap_dist - min_gap_dist), 1.0))
+    #distance_factor = normalized_distance ** 0.5
+    #angle_penalty = (1 - normalized_angle) ** 2
+    #combined_factor = 0.6 * distance_factor + 0.4 * angle_penalty
+
+    #base_velocity = max(min_velocity, base_velocity)
+    #scaled_velocity = min_velocity + (combined_factor * (base_velocity - min_velocity))
+    #scaled_velocity = max(min_velocity, min(scaled_velocity, base_velocity))
+    #return scaled_velocity
 
 def control(data):
 	global prev_error
@@ -59,9 +63,6 @@ def control(data):
 	#print("PID Control Node is Listening to error")
 	turningangle = data.pid_error
 	min_vel = data.pid_vel
-
-	angle = max(-100, min(angle, 100))
-
 	# 1. Scale the error
 	# 2. Apply the PID equation on error to compute steerin
 	
@@ -93,9 +94,22 @@ def control(data):
 	# TODO: Make sure the steering value is within bounds [-100,100]
 	command.steering_angle = math.degrees(turningangle) * 1.5
 	# TODO: Make sure the velocity is within bounds [0,100]
-	print(min_vel)
-	command.speed = min_vel
 
+
+	#print(min_vel)
+	#command.speed = min_vel
+	angle_magnitude = abs(turningangle) 
+	scaled_velocity = vel_input
+	print(math.degrees(angle_magnitude))
+	if math.degrees(angle_magnitude) > 10:
+		scaled_velocity = vel_input - math.degrees(turningangle) * .5
+	if math.degrees(angle_magnitude) > 25:
+		scaled_velocity = vel_input - math.degrees(turningangle) * .25
+		scaled_velocity = min(scaled_velocity,15)
+	print(scaled_velocity)
+
+
+	command.speed = scaled_velocity
 	# Move the car autonomously
 	command_pub.publish(command)
 

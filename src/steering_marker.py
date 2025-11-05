@@ -1,64 +1,64 @@
 #!/usr/bin/env python
 import rospy
-from ackermann_msgs.msg import AckermannDrive
+import math
+from std_msgs.msg import Int32MultiArray, Float32MultiArray, Int32
 from visualization_msgs.msg import Marker
-from geometry_msgs.msg import Quaternion
-from tf.transformations import quaternion_from_euler
 
+# Parameters
+ANGLE_MIN = -math.radians(90)   # adjust based on your LIDAR!
+ANGLE_INCREMENT = math.radians(0.3515625)  # adjust based on your LIDAR!
 
-CMD_TOPIC  = '/car_0/offboard/command'   
-FRAME_ID   = 'car_0_base_link'                 
-NS         = 'steering'
-ARROW_ID   = 1
+marker_pub = rospy.Publisher('/disparity_markers', Marker, queue_size=10)
+indices = []
+distances = []
+chosen_idx = -1
 
-POS_X      = 0.5
-POS_Y      = 0.0
-POS_Z      = 0.2
-SHAFT_LEN  = 0.6
-SHAFT_DIAM = 0.05
-HEAD_DIAM  = 0.08
+def indices_callback(msg):
+    global indices
+    indices = msg.data
 
+def distances_callback(msg):
+    global distances
+    distances = msg.data
 
-COLOR_R    = 1.0
-COLOR_G    = 0.4
-COLOR_B    = 0.0
-COLOR_A    = 1.0
+def chosen_callback(msg):
+    global chosen_idx
+    chosen_idx = msg.data
 
-marker_pub = rospy.Publisher('/visualization_marker', Marker, queue_size=10)
-
-
-def control(data):
-    """Subscribe to AckermannDrive and draw an arrow for steering."""
-    m = Marker()
-    m.header.frame_id = FRAME_ID
-    m.header.stamp    = rospy.Time.now()
-    m.ns   = NS
-    m.id   = ARROW_ID
-    m.type = Marker.ARROW
-    m.action = Marker.ADD
-
+def publish_markers(event):
+    for i, (idx, dist) in enumerate(zip(indices, distances)):
+        angle = ANGLE_MIN + idx * ANGLE_INCREMENT
+        x = dist * math.cos(angle)
+        y = dist * math.sin(angle)
+        m = Marker()
+        m.header.frame_id = "car_0_base_link"
+        m.header.stamp = rospy.Time.now()
+        m.ns = "disparity"
+        m.id = 200 + i
+        m.type = Marker.SPHERE
+        m.action = Marker.ADD
+        m.pose.position.x = x
+        m.pose.position.y = y
+        m.pose.position.z = 0.2
+        m.scale.x = 0.13
+        m.scale.y = 0.13
+        m.scale.z = 0.13
+        if i == chosen_idx:
+            m.color.r = 0.0
+            m.color.g = 1.0
+            m.color.b = 0.0
+            m.color.a = 1.0
+        else:
+            m.color.r = 1.0
+            m.color.g = 1.0
+            m.color.b = 0.0
+            m.color.a = 1.0
+        marker_pub.publish(m)
     
-    m.pose.position.x = POS_X
-    m.pose.position.y = POS_Y
-    m.pose.position.z = POS_Z
-
-    
-    yaw = getattr(data, 'steering_angle', 0.0)
-    q = quaternion_from_euler(0.0, 0.0, yaw)
-    m.pose.orientation = Quaternion(*q)
-
-    
-    m.scale.x = SHAFT_LEN
-    m.scale.y = SHAFT_DIAM
-    m.scale.z = HEAD_DIAM
-    m.color.r = COLOR_R
-    m.color.g = COLOR_G
-    m.color.b = COLOR_B
-    m.color.a = COLOR_A
-
-    marker_pub.publish(m)
-
 if __name__ == '__main__':
-    rospy.init_node('steering_marker', anonymous=True)
-    rospy.Subscriber(CMD_TOPIC, AckermannDrive, control)
+    rospy.init_node("disparity_marker_visualizer")
+    rospy.Subscriber("/disparity_indices", Int32MultiArray, indices_callback)
+    rospy.Subscriber("/disparity_distances", Float32MultiArray, distances_callback)
+    rospy.Subscriber("/chosen_gap", Int32, chosen_callback)
+    rospy.Timer(rospy.Duration(0.2), publish_markers)
     rospy.spin()
