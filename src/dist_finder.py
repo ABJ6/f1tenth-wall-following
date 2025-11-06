@@ -26,6 +26,7 @@ prev_best = 0
 disparity_indices_pub = rospy.Publisher('/disparity_indices', Int32MultiArray, queue_size=10)
 disparity_distances_pub = rospy.Publisher('/disparity_distances', Float32MultiArray, queue_size=10)
 chosen_gap_pub = rospy.Publisher('/chosen_gap', Int32, queue_size=10)
+chosen_distance = rospy.Publisher('/chosen_distance',Int32, queue_size=10 )
 
 
 # PID values = 55, 5, 0
@@ -36,7 +37,6 @@ def getRange(data,angle):
 	best_index, max_dist = find_widest_gap_center(masked,.5,3,data.angle_increment,math.radians(-90),1.0)
 	if best_index is not None:
 		target_angle = math.radians(-90) + best_index * data.angle_increment
-	
 	#except Exception as e:
 	#	target_angle = math.radians(-90) + 256 * data.angle_increment
 
@@ -49,7 +49,7 @@ def getRange(data,angle):
     # Outputs length in meters to object with angle in lidar scan field of view
     # Make sure to take care of NaNs etc.
     #TODO: implement
-	return target_angle, min_distance, best_index, disparities
+	return target_angle, min_distance, best_index, disparities, max_dist
 def find_gap(ranges):
 	max_dist = 0
 	best_index = 0
@@ -219,7 +219,7 @@ def callback(data):
 	
 
 	theta = 65 # you need to try different values for theta
-	angle, min_distance, best_index,dispartities = getRange(data, theta-120)
+	angle, min_distance, best_index,dispartities, chosen_distance_return = getRange(data, theta-120)
 	#speed = DVS(data,angle) # obtain the ray distance for theta
 	
 	#b = getRange(data, -120)	# obtain the ray distance for 0 degrees (i.e. directly to the right of the car)nt()
@@ -270,6 +270,7 @@ def callback(data):
 	disparity_indices_pub.publish(Int32MultiArray(data=indices))
 	disparity_distances_pub.publish(Float32MultiArray(data=distances))
 	chosen_gap_pub.publish(Int32(data=chosen))
+	chosen_distance.publish(Int32(data=chosen_distance_return))
 	#print(data.ranges)
 	#print(len(data.ranges))
 

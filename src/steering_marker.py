@@ -10,9 +10,10 @@ from tf.transformations import quaternion_from_euler
 
 # Parameters
 ANGLE_MIN = -math.radians(90)   # adjust based on your LIDAR!
-ANGLE_INCREMENT = math.radians(0.3515625)  # adjust based on your LIDAR!
+ANGLE_INCREMENT = 0.0061359  # adjust based on your LIDAR!
 
 marker_pub = rospy.Publisher('/disparity_markers', Marker, queue_size=10)
+cd_pub = rospy.Publisher('/tmarker', Marker, queue_size=10)
 indices = []
 distances = []
 chosen_idx = -1
@@ -28,6 +29,11 @@ def distances_callback(msg):
 def chosen_callback(msg):
     global chosen_idx
     chosen_idx = msg.data
+
+def chosen_distance(msg):
+    global chosen_dis
+    chosen_dis = msg.data
+
 
 def publish_markers(event):
     for i, (idx, dist) in enumerate(zip(indices, distances)):
@@ -47,40 +53,58 @@ def publish_markers(event):
         m.scale.x = 0.13
         m.scale.y = 0.13
         m.scale.z = 0.13
-        if i == chosen_idx:
-            m.color.r = 0.0
-            m.color.g = 1.0
-            m.color.b = 0.0
-            m.color.a = 1.0
-        else:
-            m.color.r = 1.0
-            m.color.g = 1.0
-            m.color.b = 0.0
-            m.color.a = 1.0
+        m.color.r = 1.0
+        m.color.g = 1.0
+        m.color.b = 0.0
+        m.color.a = 1.0
         marker_pub.publish(m)
-    if 0 <= chosen_idx < len(distances):
-        angle = ANGLE_MIN + chosen_idx * ANGLE_INCREMENT
-        dist = distances[chosen_idx]
-        x = dist * math.cos(angle)
-        y = dist * math.sin(angle)
-        target = Marker()
-        target.header.frame_id = "car_0_base_link"
-        target.header.stamp = rospy.Time.now()
-        target.ns = "target_point"
-        target.id = 9999
-        target.type = Marker.SPHERE
-        target.action = Marker.ADD
-        target.pose.position.x = x 
-        target.pose.position.y = y
-        target.pose.position.z = 0.2
-        target.scale.x = 0.25
-        target.scale.y = 0.25
-        target.scale.z = 0.25
-        target.color.r = 0.0
-        target.color.g = 1.0
-        target.color.b = 0.0
-        target.color.a = 1.0
-        marker_pub.publish(target)
+
+def target_marker(event):
+    angle = ANGLE_MIN + chosen_idx * ANGLE_INCREMENT
+    x = chosen_dis * math.cos(angle)
+    y = chosen_dis * math.sin(angle)
+    cd = Marker()
+    cd.header.frame_id = "car_0_base_link"
+    cd.header.stamp = rospy.Time.now()
+    cd.ns = "target"
+    cd.id = 200
+    cd.type = Marker.SPHERE
+    cd.action = Marker.ADD
+    cd.pose.position.x = x
+    cd.pose.position.y = y
+    cd.pose.position.z = 0.2
+    cd.scale.x = 0.13
+    cd.scale.y = 0.13
+    cd.scale.z = 0.13
+    cd.color.r = 0.0
+    cd.color.b = 0.0
+    cd.color.g = 1.0
+    cd.color.a = 1.0 
+    
+    marker_pub.publish(cd)
+    # if 0 <= chosen_idx < len(distances):
+    #     angle = ANGLE_MIN + chosen_idx * ANGLE_INCREMENT
+    #     dist = distances[chosen_idx]
+    #     x = dist * math.cos(angle)
+    #     y = dist * math.sin(angle)
+    #     target = Marker()
+    #     target.header.frame_id = "car_0_base_link"
+    #     target.header.stamp = rospy.Time.now()
+    #     target.ns = "target_point"
+    #     target.id = 9999
+    #     target.type = Marker.SPHERE
+    #     target.action = Marker.ADD
+    #     target.pose.position.x = x 
+    #     target.pose.position.y = y
+    #     target.pose.position.z = 0.2
+    #     target.scale.x = 0.25
+    #     target.scale.y = 0.25
+    #     target.scale.z = 0.25
+    #     target.color.r = 0.0
+    #     target.color.g = 1.0
+    #     target.color.b = 0.0
+    #     target.color.a = 1.0
+    #     marker_pub.publish(target)
 
     
 
@@ -131,8 +155,8 @@ if __name__ == '__main__':
     rospy.Subscriber("/disparity_indices", Int32MultiArray, indices_callback)
     rospy.Subscriber("/disparity_distances", Float32MultiArray, distances_callback)
     rospy.Subscriber("/chosen_gap", Int32, chosen_callback)
-   
+    rospy.Subscriber("/chosen_distance", Int32, chosen_distance)
     rospy.Subscriber("/car_0/offboard/command", AckermannDrive, steering_callback)
 
-    rospy.Timer(rospy.Duration(0.2), publish_markers)
+    rospy.Timer(rospy.Duration(0.1), publish_markers)
     rospy.spin()
