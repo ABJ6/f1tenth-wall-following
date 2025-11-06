@@ -45,9 +45,15 @@ def control(data):
 
 	# 1. Scale the error
 	# 2. Apply the PID equation on error to compute steering
-	angle = max(-100, min(angle, 100))
+	angle_magnitude = abs(turningangle) 
+	scaled_velocity = vel_input
+	if math.degrees(angle_magnitude) > 10:
+		scaled_velocity = vel_input - math.degrees(turningangle) * .5
+	if math.degrees(angle_magnitude) > 25:
+		scaled_velocity = vel_input - math.degrees(turningangle) * .25
+		scaled_velocity = max(scaled_velocity,10)
+
 	vel_input = max(0, min(vel_input,100))
-	print(vel_input)
 
 	#if errorabs > .5:
 	#	speed = max(vel_input - errorabs * 20, 30)
@@ -78,7 +84,7 @@ def control(data):
 	# TODO: Make sure the steering value is within bounds [-100,100]
 	command.steering_angle = math.degrees(turningangle) * 1.5
 	# TODO: Make sure the velocity is within bounds [0,100]
-	command.speed = vel_input 
+	command.speed = scaled_velocity
 
 
 	# Move the car autonomously
